@@ -1,0 +1,25 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "ApplianceVibration",
+        "description": "Add an ApplianceVibration sidebar panel with a tabbed view.",
+        "data": {
+          "name": "Panel name",
+          "icon": "Sidebar icon"
+        }
+      },
+      "reconfigure": {
+        "title": "Reconfigure ApplianceVibration",
+        "description": "Update the ApplianceVibration sidebar panel.",
+        "data": {
+          "name": "Panel name",
+          "icon": "Sidebar icon"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "An ApplianceVibration panel is already configured."
+    }
+  }
+}

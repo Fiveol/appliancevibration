@@ -1,0 +1,12 @@
+{
+  "domain": "appliancevibration",
+  "name": "ApplianceVibration",
+  "codeowners": ["@Fiveol"],
+  "config_flow": true,
+  "dependencies": ["frontend"],
+  "documentation": "https://github.com/Fiveol/appliancevibration",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/Fiveol/appliancevibration/issues",
+  "single_config_entry": true,
+  "version": "0.1.0"
+}
