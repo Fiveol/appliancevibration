@@ -17,9 +17,6 @@
           "icon": "Sidebar icon"
         }
       }
-    },
-    "abort": {
-      "already_configured": "An ApplianceVibration panel is already configured."
     }
   }
 }

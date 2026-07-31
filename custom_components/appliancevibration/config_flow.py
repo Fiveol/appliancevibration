@@ -22,8 +22,8 @@ class ApplianceVibrationConfigFlow(ConfigFlow, domain=DOMAIN):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Handle the initial step."""
-        self.async_abort_if_done()
-
+        # Single-instance enforcement is handled by core via the
+        # `single_config_entry` manifest flag.
         if user_input is not None:
             return self.async_create_entry(
                 title=user_input[CONF_NAME],
