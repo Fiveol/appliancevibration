@@ -616,7 +616,7 @@ class ApplianceVibrationPanel extends HTMLElement {
         <div class="mini-stats">
           <div class="mini-stat">
             <div class="val" data-level="${esc(device.id)}">${level.toFixed(2)}</div>
-            <div class="lbl">Vibration (g)</div>
+            <div class="lbl">Vibration</div>
           </div>
           <div class="mini-stat">
             <div class="val" data-dur="${esc(device.id)}">
@@ -674,7 +674,7 @@ class ApplianceVibrationPanel extends HTMLElement {
         <p class="muted">ApplianceVibration watches the sensors you assign to a device and learns the programs of your appliances.</p>
         <div class="list-row">
           <span class="chip"><span class="dot" style="background:var(--primary-color)"></span>1</span>
-          <span class="grow name">Create a device and assign its vibration binary sensor (plus optional X, Y, Z movement sensors).</span>
+          <span class="grow name">Create a device and assign its vibration binary sensor — it decides IF vibration is happening. Optionally add X/Y/Z movement sensors to measure HOW strongly (raw accelerometer output works out of the box).</span>
         </div>
         <div class="list-row">
           <span class="chip"><span class="dot" style="background:var(--primary-color)"></span>2</span>
@@ -994,8 +994,8 @@ class ApplianceVibrationPanel extends HTMLElement {
           <summary>Advanced settings</summary>
           <div class="field-row" style="margin-top: 10px;">
             <div class="field">
-              <label for="f-threshold">Activity threshold (g)</label>
-              <input type="number" id="f-threshold" min="0" max="1" step="0.05" value="${this._setting(device, "threshold")}">
+              <label for="f-threshold">Activity threshold</label>
+              <input type="number" id="f-threshold" min="0" max="100000" step="0.01" value="${this._setting(device, "threshold")}">
             </div>
             <div class="field">
               <label for="f-confidence">Min. confidence</label>
@@ -1199,8 +1199,8 @@ class ApplianceVibrationPanel extends HTMLElement {
           <div class="muted" style="font-size:12px;">No stage data recorded for this cycle.</div>`}
         <div class="section-label">Vibration</div>
         <div class="mini-stats">
-          <div class="mini-stat"><div class="val">${mean}</div><div class="lbl">Mean (g)</div></div>
-          <div class="mini-stat"><div class="val">${peak}</div><div class="lbl">Peak (g)</div></div>
+          <div class="mini-stat"><div class="val">${mean}</div><div class="lbl">Mean</div></div>
+          <div class="mini-stat"><div class="val">${peak}</div><div class="lbl">Peak</div></div>
           <div class="mini-stat"><div class="val">${active}</div><div class="lbl">Active</div></div>
         </div>
         <div class="actions">

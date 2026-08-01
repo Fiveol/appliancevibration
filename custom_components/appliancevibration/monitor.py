@@ -60,6 +60,9 @@ _BINARY_ON = {"on", "home", "true", "1", "yes"}
 # Rolling activity window (seconds) used to classify binary-only devices.
 _BINARY_WINDOW = 90.0
 
+# Rolling window (seconds) per axis used to estimate the gravity baseline.
+_AXIS_WINDOW_SECONDS = 10.0
+
 
 class DeviceMonitor:
     """Detect and classify vibration cycles for a single device."""
@@ -97,6 +100,13 @@ class DeviceMonitor:
         self._cycle_start_mono: float | None = None
         self._stages: list[dict[str, Any]] = []
         self._window: deque[tuple[float, bool]] = deque(maxlen=512)
+        # Raw-axis rolling windows (gravity baseline), filtered magnitude
+        # history and the measured noise floor for adaptive intensity bands.
+        self._axis_windows: dict[str, deque[tuple[float, float]]] = {
+            axis: deque(maxlen=256) for axis in ("x", "y", "z")
+        }
+        self._mag_window: deque[tuple[float, float]] = deque(maxlen=512)
+        self._noise_ema = 0.0
 
         self._start_unsub: Callable[[], None] | None = None
         self._end_unsub: Callable[[], None] | None = None
@@ -200,6 +210,7 @@ class DeviceMonitor:
         self._max = 0.0
         self._cycle_start_mono = time.monotonic()
         self._window.clear()
+        self._mag_window.clear()
         self.stage = None
         self.stage_started_at = None
         self._level = None
@@ -296,22 +307,32 @@ class DeviceMonitor:
     # -- helpers -----------------------------------------------------------
 
     def _is_active(self, state: Any, entities: dict[str, str]) -> bool:
-        """Return whether the device is currently vibrating."""
+        """Return whether the device is currently vibrating.
+
+        The vibration binary sensor decides IF the device is vibrating; the
+        X/Y/Z movement sensors only describe HOW strongly. The magnitude
+        fallback only applies when no binary sensor is assigned.
+        """
         vibration_id = entities.get("vibration")
-        vibration_state = None
         if vibration_id:
             vibration_state = self.hass.states.get(vibration_id)
-        if vibration_state is not None and vibration_state.state in _BINARY_ON:
-            return True
+            if vibration_state is not None:
+                return vibration_state.state in _BINARY_ON
 
         if not (entities.get("x") or entities.get("y") or entities.get("z")):
             return False
         return self.magnitude > self.threshold
 
     def _record_sample(self, state: Any) -> None:
-        """Compute the current magnitude and accumulate statistics."""
+        """Update axis baselines and compute the filtered vibration magnitude.
+
+        Raw accelerometer output (counts or milli-g) includes a constant
+        gravity offset and sensor noise. The magnitude is therefore computed
+        as the RMS deviation of each axis from its recent rolling mean, which
+        removes the offset and leaves only the vibration intensity.
+        """
         entities = self.data.get(DEV_ENTITIES, {})
-        axis_values: dict[str, float] = {}
+        now = time.monotonic()
         for axis in ("x", "y", "z"):
             entity_id = entities.get(axis)
             value = None
@@ -322,21 +343,35 @@ class DeviceMonitor:
                         value = float(axis_state.state)
                     except (TypeError, ValueError):
                         value = None
-            axis_values[axis] = value
-            self.axes[axis] = value
+            if value is not None:
+                self._axis_windows[axis].append((now, value))
+                self.axes[axis] = value
 
-        if any(value is not None for value in axis_values.values()):
-            values = [value for value in axis_values.values() if value is not None]
-            magnitude = math.sqrt(sum(value * value for value in values))
+        magnitudes: list[float] = []
+        for axis in ("x", "y", "z"):
+            window = self._axis_windows[axis]
+            while window and window[0][0] < now - _AXIS_WINDOW_SECONDS:
+                window.popleft()
+            values = [value for _, value in window]
+            if not values:
+                continue
+            mean = sum(values) / len(values)
+            variance = sum((value - mean) ** 2 for value in values) / len(values)
+            magnitudes.append(variance)
+        if magnitudes:
+            magnitude = math.sqrt(sum(magnitudes))
         elif state is not None and state.state in _BINARY_ON:
             magnitude = 1.0
         else:
             magnitude = 0.0
         self.magnitude = round(magnitude, 4)
 
-        active = self.magnitude > self.threshold
-        self._window.append((time.monotonic(), active))
+        active = self._is_active(state, entities)
+        self._window.append((now, active))
+        self._mag_window.append((now, self.magnitude))
         self._samples += 1
+        if not active and self._has_axes():
+            self._noise_ema = self._noise_ema * 0.95 + self.magnitude * 0.05
         if active:
             self._active_samples += 1
             self._sum += self.magnitude
@@ -344,7 +379,7 @@ class DeviceMonitor:
             self._max = max(self._max, self.magnitude)
 
         if self.running:
-            self._update_stage(time.monotonic())
+            self._update_stage(now)
 
     # -- stage detection --------------------------------------------------
 
@@ -377,10 +412,23 @@ class DeviceMonitor:
             active_time += now - prev_time
         return min(1.0, max(0.0, active_time / total))
 
+    def _recent_mag_max(self, window_seconds: float = 60.0) -> float:
+        """Return the peak filtered magnitude over the recent window."""
+        cutoff = time.monotonic() - window_seconds
+        best = 0.0
+        for sample_time, magnitude in self._mag_window:
+            if sample_time >= cutoff:
+                best = max(best, magnitude)
+        return best
+
     def _level_band(self) -> str:
         """Classify the current sample into an activity level band."""
         if self._has_axes():
-            return stages.level_for_magnitude(self.magnitude, self.threshold)
+            if len(self._mag_window) < 5:
+                return stages.LEVEL_IDLE
+            return stages.level_for_intensity(
+                self.magnitude, self._noise_ema, self._recent_mag_max()
+            )
         return stages.level_for_activity_ratio(self._activity_ratio())
 
     def _update_stage(self, now: float) -> None:

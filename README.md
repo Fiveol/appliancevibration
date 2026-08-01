@@ -9,7 +9,11 @@ cycles and learns to recognize their programs.
 - Added entirely through the UI (config flow) - no YAML configuration needed
 - Sidebar panel with a tabbed view (Overview / Devices / Settings)
 - Create appliance devices and assign a vibration binary sensor plus optional
-  X, Y, Z movement sensors
+  X, Y, Z movement sensors. The binary sensor decides **if** vibration is
+  happening; the movement sensors describe **how strongly** (stage detection
+  and classification). Raw accelerometer output (counts or milli-g) is
+  supported: gravity offset and sensor noise are removed automatically and
+  the intensity bands adapt to your sensor's scale
 - Automatic cycle detection: a cycle starts after `start_delay` seconds of
   vibration and ends after `end_delay` seconds of silence
 - Stage detection: while a cycle runs, the current stage (Wash, Rinse, Spin,
@@ -27,7 +31,8 @@ cycles and learns to recognize their programs.
   - `Stage duration` (sensor, how long the current stage has lasted)
   - `Time remaining` (sensor, estimated time left in the cycle)
   - `Program` (enum sensor with the detected program)
-  - `Vibration level` (sensor, current magnitude in g)
+  - `Vibration level` (sensor, current vibration magnitude - gravity-offset
+    RMS deviation of the raw X/Y/Z values, unitless)
   - `Cycle duration` (sensor)
   - `Cycle count` (diagnostic sensor)
 
@@ -44,8 +49,10 @@ cycles and learns to recognize their programs.
 
 1. Open the ApplianceVibration panel from the sidebar and go to **Devices**.
 2. Click **Add device**, name your appliance (e.g. "Washing Machine") and
-   assign its vibration sensor. If your sensor reports X/Y/Z movement values,
-   assign them too - the more data, the better the classification.
+   assign its vibration binary sensor - it decides whether a cycle is running.
+   If your sensor reports X/Y/Z movement values, assign them too: they
+   measure how strongly the appliance vibrates, which improves stage
+   detection and classification.
 3. Run a normal cycle (e.g. your "Cotton" program). When it finishes, the
    integration records it and the panel asks you to label it.
 4. Label each distinct program a couple of times. After that, new cycles are
@@ -61,7 +68,8 @@ program and stage durations instead of the built-in defaults.
 
 Per-device settings (edit dialog > Advanced):
 
-- **Activity threshold (g)** - magnitude that counts as vibration
+- **Activity threshold** - magnitude that counts as vibration. Only used
+  when no binary sensor is assigned; with a binary sensor it is authoritative
 - **Cycle start delay (s)** - sustained vibration needed to start a cycle
 - **Cycle end delay (s)** - silence needed to consider a cycle finished
 - **Min. confidence** - how certain the classifier must be before labeling a

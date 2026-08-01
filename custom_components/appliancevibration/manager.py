@@ -7,9 +7,11 @@ entries, and the per-device cycle monitors.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import time
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
@@ -17,7 +19,6 @@ from homeassistant.core import EVENT_STATE_CHANGED, Event, HomeAssistant, callba
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.entity import Entity, slugify
-from homeassistant import loader
 
 from . import classification
 from .const import (
@@ -51,6 +52,12 @@ from .store import ApplianceVibrationStore
 
 _LOGGER = logging.getLogger(__name__)
 
+# Read once at module load; with `import_executor` in the manifest this runs
+# in the executor, so it never blocks the event loop.
+_MANIFEST_VERSION: str = json.loads(
+    (Path(__file__).parent / "manifest.json").read_text()
+)["version"]
+
 
 class ApplianceVibrationManager:
     """Manage appliance devices, entities and monitors."""
@@ -59,7 +66,7 @@ class ApplianceVibrationManager:
         """Initialize the manager."""
         self.hass = hass
         self.entry = entry
-        self.version = ""
+        self.version = _MANIFEST_VERSION
         self.store = ApplianceVibrationStore(hass)
         self.devices: dict[str, dict[str, Any]] = {}
         self.monitors: dict[str, DeviceMonitor] = {}
@@ -74,7 +81,6 @@ class ApplianceVibrationManager:
 
     async def async_setup(self) -> None:
         """Load stored data and create monitors for existing devices."""
-        self.version = (await loader.async_get_integration(self.hass, DOMAIN)).version
         devices = await self.store.async_load()
         for data in devices.values():
             self._normalize_device(data)

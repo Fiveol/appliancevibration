@@ -99,18 +99,20 @@ STAGE_TEMPLATES: list[list[str]] = [
 ]
 
 
-def level_for_magnitude(magnitude: float, threshold: float) -> str:
-    """Classify a magnitude sample into an activity level band."""
-    if threshold <= 0:
+def level_for_intensity(magnitude: float, noise_floor: float, peak: float) -> str:
+    """Classify a vibration magnitude into an activity level band.
+
+    The bands are relative to the measured noise floor and the recent peak
+    magnitude, so they adapt to any accelerometer scale (raw counts, mg, g).
+    """
+    if peak <= noise_floor * 4 or magnitude <= noise_floor * 2:
         return LEVEL_IDLE
-    ratio = magnitude / threshold
-    if ratio >= 3.0:
+    reference = max(peak, noise_floor * 4)
+    if magnitude >= reference * 0.6:
         return LEVEL_HIGH
-    if ratio >= 1.5:
+    if magnitude >= reference * 0.2:
         return LEVEL_MEDIUM
-    if magnitude > threshold:
-        return LEVEL_LOW
-    return LEVEL_IDLE
+    return LEVEL_LOW
 
 
 def level_for_activity_ratio(ratio: float) -> str:

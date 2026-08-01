@@ -239,9 +239,12 @@ class VibrationProgramEntity(ApplianceVibrationEntity, SensorEntity):
 
 
 class VibrationLevelEntity(ApplianceVibrationEntity, SensorEntity):
-    """Sensor with the current vibration magnitude."""
+    """Sensor with the current vibration magnitude.
 
-    _attr_native_unit_of_measurement = "g"
+    The magnitude is the gravity-offset RMS deviation of the raw X/Y/Z
+    accelerometer output, so it is unitless (raw sensor counts).
+    """
+
     _attr_state_class = SensorStateClass.MEASUREMENT
 
     def __init__(self, manager: Any, device_id: str) -> None:
