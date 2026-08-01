@@ -18,5 +18,48 @@
         }
       }
     }
+  },
+  "component": {
+    "appliancevibration": {
+      "entity": {
+        "binary_sensor": {
+          "cycle": {
+            "name": "Cycle"
+          }
+        },
+        "sensor": {
+          "program": {
+            "name": "Program"
+          },
+          "level": {
+            "name": "Vibration level"
+          },
+          "duration": {
+            "name": "Cycle duration"
+          },
+          "count": {
+            "name": "Cycle count"
+          },
+          "stage": {
+            "name": "Stage",
+            "state": {
+              "idle": "Idle",
+              "soak": "Soak",
+              "wash": "Wash",
+              "rinse": "Rinse",
+              "drain": "Drain",
+              "spin": "Spin",
+              "pause": "Pause"
+            }
+          },
+          "stage_duration": {
+            "name": "Stage duration"
+          },
+          "time_remaining": {
+            "name": "Time remaining"
+          }
+        }
+      }
+    }
   }
 }

@@ -1,6 +1,7 @@
 """ApplianceVibration integration.
 
-Provides a config-flow driven sidebar panel with a tabbed frontend view.
+Provides a config-flow driven sidebar panel with a tabbed frontend view,
+device monitoring with cycle detection, and program learning.
 """
 
 from __future__ import annotations
@@ -19,8 +20,11 @@ from .const import (
     PANEL_FILENAME,
     PANEL_STATIC_PATH,
     PANEL_URL_PATH,
+    PLATFORMS,
     WEBCOMPONENT_NAME,
 )
+from .manager import ApplianceVibrationManager
+from .websocket import async_register_websocket_commands
 
 STATIC_PATH_REGISTERED = f"{DOMAIN}_static_path_registered"
 
@@ -28,7 +32,8 @@ STATIC_PATH_REGISTERED = f"{DOMAIN}_static_path_registered"
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up ApplianceVibration from a config entry.
 
-    Serves the panel bundle over HTTP and registers the sidebar panel.
+    Serves the panel bundle over HTTP, registers the sidebar panel and starts
+    the device monitors.
     """
     if not hass.data.get(STATIC_PATH_REGISTERED):
         panel_dir = Path(__file__).parent / "frontend"
@@ -58,13 +63,28 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         require_admin=False,
     )
 
+    manager = ApplianceVibrationManager(hass, entry)
+    await manager.async_setup()
+    hass.data[DOMAIN] = manager
+
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    manager.async_start()
+    async_register_websocket_commands(hass, manager)
+
     return True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Unload a config entry by removing its sidebar panel."""
+    """Unload a config entry."""
     frontend.async_remove_panel(hass, PANEL_URL_PATH)
-    return True
+
+    if manager := hass.data.get(DOMAIN):
+        await manager.async_shutdown()
+
+    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if unload_ok:
+        hass.data.pop(DOMAIN, None)
+    return unload_ok
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
