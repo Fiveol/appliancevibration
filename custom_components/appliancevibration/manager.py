@@ -6,10 +6,10 @@ entries, and the per-device cycle monitors.
 
 from __future__ import annotations
 
+import asyncio
 import logging
-import json
+import time
 from collections.abc import Callable
-from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
@@ -17,6 +17,7 @@ from homeassistant.core import EVENT_STATE_CHANGED, Event, HomeAssistant, callba
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.entity import Entity, slugify
+from homeassistant import loader
 
 from . import classification
 from .const import (
@@ -58,9 +59,7 @@ class ApplianceVibrationManager:
         """Initialize the manager."""
         self.hass = hass
         self.entry = entry
-        self.version = json.loads(
-            (Path(__file__).parent / "manifest.json").read_text()
-        )["version"]
+        self.version = ""
         self.store = ApplianceVibrationStore(hass)
         self.devices: dict[str, dict[str, Any]] = {}
         self.monitors: dict[str, DeviceMonitor] = {}
@@ -75,6 +74,7 @@ class ApplianceVibrationManager:
 
     async def async_setup(self) -> None:
         """Load stored data and create monitors for existing devices."""
+        self.version = (await loader.async_get_integration(self.hass, DOMAIN)).version
         devices = await self.store.async_load()
         for data in devices.values():
             self._normalize_device(data)
@@ -113,10 +113,25 @@ class ApplianceVibrationManager:
         self._adders[platform].append(adder)
 
     async def _add_entities(self, entities: list[Entity]) -> None:
-        """Add entities through the registered platform adders."""
+        """Add entities through the registered platform adders.
+
+        The platform adders are scheduling callbacks (they return None and add
+        the entities in an eager background task), so we wait until the entity
+        platforms have processed the entities before returning.
+        """
         for entity in entities:
             for adder in self._adders[entity.PLATFORM]:
-                await adder([entity])
+                adder([entity])
+        deadline = time.monotonic() + 5.0
+        while any(entity.entity_id is None for entity in entities):
+            if time.monotonic() >= deadline:
+                device_id = entities[0]._device_id if entities else "?"
+                _LOGGER.warning(
+                    "Timed out waiting for the entities of device %s to be added",
+                    device_id,
+                )
+                break
+            await asyncio.sleep(0)
 
     # -- device registry ---------------------------------------------------
 
@@ -129,7 +144,7 @@ class ApplianceVibrationManager:
             name=data[DEV_NAME],
             manufacturer="ApplianceVibration",
             model="Vibration Monitor",
-            sw_version=self.version,
+            sw_version=self.version or None,
         )
 
     # -- entity creation ---------------------------------------------------
@@ -151,13 +166,9 @@ class ApplianceVibrationManager:
         self._entity_map.setdefault(device_id, []).extend(entities)
         await self._add_entities(entities)
 
-        registry = self.hass.helpers.entity_registry.async_get(self.hass)
         for entity in entities:
-            entity_id = registry.async_get_entity_id(
-                entity.PLATFORM, DOMAIN, entity.unique_id
-            )
-            if entity_id:
-                existing[entity._key] = entity_id
+            if entity.entity_id:
+                existing[entity._key] = entity.entity_id
         data[DEV_ENT_IDS] = existing
         self._update_program_options(device_id)
 
@@ -166,7 +177,8 @@ class ApplianceVibrationManager:
         for entity in self._entity_map.get(device_id, []):
             if isinstance(entity, VibrationProgramEntity):
                 entity.update_options()
-                entity.async_write_ha_state()
+                if entity.entity_id:
+                    entity.async_write_ha_state()
 
     # -- monitors ----------------------------------------------------------
 
