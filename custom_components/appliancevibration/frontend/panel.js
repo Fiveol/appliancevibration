@@ -1009,6 +1009,10 @@ class ApplianceVibrationPanel extends HTMLElement {
               <label for="f-end">Cycle end delay (s)</label>
               <input type="number" id="f-end" min="10" max="600" step="1" value="${this._setting(device, "end_delay")}">
             </div>
+            <div class="field">
+              <label for="f-mindur">Minimum run duration (s)</label>
+              <input type="number" id="f-mindur" min="0" max="3600" step="30" value="${this._setting(device, "min_duration")}">
+            </div>
           </div>
         </details>
         ${isEdit ? `
@@ -1046,7 +1050,7 @@ class ApplianceVibrationPanel extends HTMLElement {
   }
 
   _setting(device, key) {
-    return device ? (device.settings[key] ?? 0.2) : { threshold: 0.2, min_confidence: 0.7, start_delay: 10, end_delay: 60 }[key];
+    return device ? (device.settings[key] ?? 0.2) : { threshold: 0.2, min_confidence: 0.7, start_delay: 10, end_delay: 60, min_duration: 300 }[key];
   }
 
   _submitDialog(overlay) {
@@ -1071,6 +1075,7 @@ class ApplianceVibrationPanel extends HTMLElement {
       min_confidence: parseFloat(overlay.querySelector("#f-confidence").value),
       start_delay: parseInt(overlay.querySelector("#f-start").value, 10),
       end_delay: parseInt(overlay.querySelector("#f-end").value, 10),
+      min_duration: parseInt(overlay.querySelector("#f-mindur").value, 10),
     };
 
     if (overlay._device) {

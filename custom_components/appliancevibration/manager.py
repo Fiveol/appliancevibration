@@ -43,6 +43,7 @@ from .const import (
     PROGRAM_COLORS,
     SETTING_END_DELAY,
     SETTING_MIN_CONFIDENCE,
+    SETTING_MIN_DURATION,
     SETTING_START_DELAY,
     SETTING_THRESHOLD,
 )
@@ -142,11 +143,24 @@ class ApplianceVibrationManager:
     # -- device registry ---------------------------------------------------
 
     def _ensure_device_registry(self, data: dict[str, Any]) -> dr.DeviceEntry:
-        """Create or update the Home Assistant device registry entry."""
+        """Create or update the Home Assistant device registry entry.
+
+        The software version is only set when the entry is created. Updating
+        it on an existing entry makes HA compare the new value against the
+        stored one, which raises an AwesomeVersionCompareException whenever
+        either side is not a parseable version (e.g. a None written by an
+        older release).
+        """
         registry = dr.async_get(self.hass)
+        identifiers = {(DOMAIN, data[DEV_ID])}
+        device = registry.async_get_device(identifiers)
+        if device is not None:
+            if device.name != data[DEV_NAME]:
+                registry.async_update_device(device.id, name=data[DEV_NAME])
+            return device
         return registry.async_get_or_create(
             config_entry_id=self.entry.entry_id,
-            identifiers={(DOMAIN, data[DEV_ID])},
+            identifiers=identifiers,
             name=data[DEV_NAME],
             manufacturer="ApplianceVibration",
             model="Vibration Monitor",
@@ -426,6 +440,7 @@ class ApplianceVibrationManager:
             SETTING_START_DELAY: int(settings.get(SETTING_START_DELAY, 10)),
             SETTING_END_DELAY: int(settings.get(SETTING_END_DELAY, 60)),
             SETTING_MIN_CONFIDENCE: float(settings.get(SETTING_MIN_CONFIDENCE, 0.7)),
+            SETTING_MIN_DURATION: int(settings.get(SETTING_MIN_DURATION, 300)),
         }
         normalized[SETTING_THRESHOLD] = min(
             1.0, max(0.0, normalized[SETTING_THRESHOLD])
@@ -436,6 +451,9 @@ class ApplianceVibrationManager:
         normalized[SETTING_END_DELAY] = min(600, max(10, normalized[SETTING_END_DELAY]))
         normalized[SETTING_MIN_CONFIDENCE] = min(
             0.99, max(0.5, normalized[SETTING_MIN_CONFIDENCE])
+        )
+        normalized[SETTING_MIN_DURATION] = min(
+            3600, max(0, normalized[SETTING_MIN_DURATION])
         )
         return normalized
 

@@ -19,7 +19,7 @@ from collections.abc import Callable
 from datetime import timedelta
 from typing import Any
 
-from homeassistant.core import Event, HomeAssistant
+from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers.event import async_track_point_in_utc_time
 from homeassistant.util import dt as dt_util
 
@@ -39,6 +39,7 @@ from .const import (
     CYC_STARTED,
     DEFAULT_END_DELAY,
     DEFAULT_MIN_CONFIDENCE,
+    DEFAULT_MIN_DURATION,
     DEFAULT_START_DELAY,
     DEFAULT_THRESHOLD,
     DEV_CYCLES,
@@ -49,6 +50,7 @@ from .const import (
     PROG_STATS,
     SETTING_END_DELAY,
     SETTING_MIN_CONFIDENCE,
+    SETTING_MIN_DURATION,
     SETTING_START_DELAY,
     SETTING_THRESHOLD,
 )
@@ -86,6 +88,7 @@ class DeviceMonitor:
         self.since: float | None = None
         self.magnitude = 0.0
         self.axes: dict[str, float | None] = {"x": None, "y": None, "z": None}
+        self._vibration_seen = False
 
         # Live stage state.
         self.stage: str | None = None
@@ -145,6 +148,15 @@ class DeviceMonitor:
             self.data.get(DEV_SETTINGS, {}).get(SETTING_END_DELAY, DEFAULT_END_DELAY)
         )
 
+    @property
+    def min_duration(self) -> int:
+        """Return the minimum cycle duration in seconds."""
+        return int(
+            self.data.get(DEV_SETTINGS, {}).get(
+                SETTING_MIN_DURATION, DEFAULT_MIN_DURATION
+            )
+        )
+
     async def async_shutdown(self) -> None:
         """Cancel pending timers."""
         if self._start_unsub:
@@ -184,7 +196,7 @@ class DeviceMonitor:
             else:
                 self._start_unsub = async_track_point_in_utc_time(
                     self.hass,
-                    lambda _: self._start_cycle(),
+                    self._on_start_timer,
                     event.time_fired + timedelta(seconds=self.start_delay),
                 )
         elif self._start_unsub:
@@ -192,6 +204,16 @@ class DeviceMonitor:
             self._start_unsub()
             self._start_unsub = None
         self._update_callback()
+
+    @callback
+    def _on_start_timer(self, _: Any) -> None:
+        """Start the cycle when the start delay elapses."""
+        self._start_cycle()
+
+    @callback
+    def _on_end_timer(self, _: Any) -> None:
+        """End the cycle when the end delay elapses."""
+        self._end_cycle()
 
     # -- cycle lifecycle ---------------------------------------------------
 
@@ -211,6 +233,7 @@ class DeviceMonitor:
         self._cycle_start_mono = time.monotonic()
         self._window.clear()
         self._mag_window.clear()
+        self._vibration_seen = False
         self.stage = None
         self.stage_started_at = None
         self._level = None
@@ -243,6 +266,26 @@ class DeviceMonitor:
         self._pending_level = None
         self._pending_since = None
         duration_min = (ended - (self.since or ended)) / 60.0
+        entities = self.data.get(DEV_ENTITIES, {})
+        if not self._vibration_seen and entities.get("vibration"):
+            # The binary sensor never reported vibration during the run;
+            # XYZ movements alone do not count as a cycle.
+            _LOGGER.debug(
+                "Cycle discarded for %s: no vibration detected (%.1fmin)",
+                self.device_id,
+                duration_min,
+            )
+            self._update_callback()
+            return
+        if duration_min * 60.0 < self.min_duration:
+            _LOGGER.debug(
+                "Cycle discarded for %s: too short (%.1fmin < %ds)",
+                self.device_id,
+                duration_min,
+                self.min_duration,
+            )
+            self._update_callback()
+            return
         samples = max(self._active_samples, 1)
         mean = self._sum / samples
         variance = max(0.0, self._sum_sq / samples - mean * mean)
@@ -306,6 +349,14 @@ class DeviceMonitor:
 
     # -- helpers -----------------------------------------------------------
 
+    def _binary_active(self, entities: dict[str, str]) -> bool:
+        """Return whether the assigned vibration binary sensor is on."""
+        vibration_id = entities.get("vibration")
+        if not vibration_id:
+            return False
+        vibration_state = self.hass.states.get(vibration_id)
+        return vibration_state is not None and vibration_state.state in _BINARY_ON
+
     def _is_active(self, state: Any, entities: dict[str, str]) -> bool:
         """Return whether the device is currently vibrating.
 
@@ -315,9 +366,7 @@ class DeviceMonitor:
         """
         vibration_id = entities.get("vibration")
         if vibration_id:
-            vibration_state = self.hass.states.get(vibration_id)
-            if vibration_state is not None:
-                return vibration_state.state in _BINARY_ON
+            return self._binary_active(entities)
 
         if not (entities.get("x") or entities.get("y") or entities.get("z")):
             return False
@@ -367,6 +416,8 @@ class DeviceMonitor:
         self.magnitude = round(magnitude, 4)
 
         active = self._is_active(state, entities)
+        if self._binary_active(entities):
+            self._vibration_seen = True
         self._window.append((now, active))
         self._mag_window.append((now, self.magnitude))
         self._samples += 1
@@ -532,7 +583,7 @@ class DeviceMonitor:
             return
         self._end_unsub = async_track_point_in_utc_time(
             self.hass,
-            lambda _: self._end_cycle(),
+            self._on_end_timer,
             dt_util.utcnow() + timedelta(seconds=self.end_delay),
         )
 

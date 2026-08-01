@@ -15,7 +15,10 @@ cycles and learns to recognize their programs.
   supported: gravity offset and sensor noise are removed automatically and
   the intensity bands adapt to your sensor's scale
 - Automatic cycle detection: a cycle starts after `start_delay` seconds of
-  vibration and ends after `end_delay` seconds of silence
+  vibration and ends after `end_delay` seconds of silence. Runs are
+  disregarded when they are shorter than the minimum run duration (5 minutes
+  by default) or when the vibration binary sensor never reported vibration
+  during the run (X/Y/Z movements alone do not count)
 - Stage detection: while a cycle runs, the current stage (Wash, Rinse, Spin,
   Drain, Soak, ...) is detected live from the vibration pattern, matched
   against common stage sequences (e.g. wash -> drain -> rinse -> drain -> spin)
@@ -72,6 +75,9 @@ Per-device settings (edit dialog > Advanced):
   when no binary sensor is assigned; with a binary sensor it is authoritative
 - **Cycle start delay (s)** - sustained vibration needed to start a cycle
 - **Cycle end delay (s)** - silence needed to consider a cycle finished
+- **Minimum run duration (s)** - runs shorter than this are discarded (not
+  recorded, not classified). Defaults to 300 (5 minutes). Runs are also
+  discarded when the vibration binary sensor never reported vibration
 - **Min. confidence** - how certain the classifier must be before labeling a
   cycle automatically
 

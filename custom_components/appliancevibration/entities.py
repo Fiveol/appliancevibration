@@ -66,7 +66,6 @@ class ApplianceVibrationEntity(Entity):
             identifiers={(DOMAIN, device_id)},
             manufacturer=_MANUFACTURER,
             model=_MODEL,
-            sw_version=manager.version or None,
         )
 
     @property

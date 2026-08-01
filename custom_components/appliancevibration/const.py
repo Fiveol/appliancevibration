@@ -45,11 +45,13 @@ DEFAULT_THRESHOLD = 0.2
 DEFAULT_START_DELAY = 10
 DEFAULT_END_DELAY = 60
 DEFAULT_MIN_CONFIDENCE = 0.7
+DEFAULT_MIN_DURATION = 300  # seconds; runs shorter than this are discarded
 
 SETTING_THRESHOLD = "threshold"
 SETTING_START_DELAY = "start_delay"
 SETTING_END_DELAY = "end_delay"
 SETTING_MIN_CONFIDENCE = "min_confidence"
+SETTING_MIN_DURATION = "min_duration"
 
 # Device storage keys
 ATTR_DEVICES = "devices"

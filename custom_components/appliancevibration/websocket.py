@@ -32,6 +32,7 @@ _SETTINGS_SCHEMA = {
     vol.Optional("start_delay", default=10): vol.Coerce(int),
     vol.Optional("end_delay", default=60): vol.Coerce(int),
     vol.Optional("min_confidence", default=0.7): vol.Coerce(float),
+    vol.Optional("min_duration", default=300): vol.Coerce(int),
 }
 
 _PROGRAM_SCHEMA = {
